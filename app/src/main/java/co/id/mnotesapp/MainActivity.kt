@@ -1,11 +1,15 @@
 package co.id.mnotesapp
 
 import android.content.Intent
+import android.database.ContentObserver
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
 import android.view.View
 import androidx.recyclerview.widget.LinearLayoutManager
 import co.id.mnotesapp.adapter.NoteAdapter
+import co.id.mnotesapp.db.DatabaseContract.NoteColumns.Companion.CONTENT_URI
 import co.id.mnotesapp.db.NoteHelper
 import co.id.mnotesapp.entity.Note
 import co.id.mnotesapp.helper.MappingHelper
@@ -39,6 +43,19 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this@MainActivity, NoteAddUpdateActivity::class.java)
             startActivityForResult(intent, NoteAddUpdateActivity.REQUEST_ADD)
         }
+
+        val handlerThread = HandlerThread("DataObserver")
+        handlerThread.start()
+        val handler = Handler(handlerThread.looper)
+
+        val myObserver = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean) {
+                loadNotesAsync()
+            }
+        }
+
+        contentResolver.registerContentObserver(CONTENT_URI, true, myObserver)
+
         noteHelper = NoteHelper.getInstance(applicationContext)
         noteHelper.open()
 
@@ -56,7 +73,7 @@ class MainActivity : AppCompatActivity() {
         GlobalScope.launch(Dispatchers.Main) {
             progressbar.visibility = View.VISIBLE
             val deferredNotes = async(Dispatchers.IO) {
-                val cursor = noteHelper.queryAll()
+                val cursor = contentResolver?.query(CONTENT_URI, null, null, null, null)
                 MappingHelper.mapCursorToArrayList(cursor)
             }
             progressbar.visibility = View.INVISIBLE
